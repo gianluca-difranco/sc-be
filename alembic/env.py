@@ -21,7 +21,7 @@ from db.models import Base
 from core.config import config as app_config
 target_metadata = Base.metadata
 
-config.set_main_option("sqlalchemy.url", app_config.DATABASE_URL)
+config.set_main_option("sqlalchemy.url", app_config.db_url)
 
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")

@@ -19,3 +19,6 @@ python-multipart==0.0.9
 
 # Utility
 python-dotenv==1.0.1
+
+# AWS SDK
+boto3==1.34.69

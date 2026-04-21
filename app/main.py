@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import auth, tenants, users, players, teams, matches
+from app.routers import auth, tenants, users, players, teams, matches, messages
 
 app = FastAPI(title="Fantacalcio Multi-Tenant API")
 
@@ -19,6 +19,8 @@ app.include_router(users.router)
 app.include_router(players.router)
 app.include_router(teams.router)
 app.include_router(matches.router)
+app.include_router(messages.router)
+
 
 @app.get("/")
 def root():
