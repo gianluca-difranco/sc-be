@@ -1,12 +1,23 @@
+import random
+import string
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from db.models import Tenant, User, Player, Team, PointModifier, Match, Performance, Lineup
-from app.schemas import TenantCreate, UserCreate, PlayerCreate, TeamCreate, PointModifierCreate, LineupCreate, MatchdayCalculate
-from app.auth import get_password_hash
+from app.schemas import TenantCreate, TenantUpdate, UserCreate, PlayerCreate, TeamCreate, PointModifierCreate, LineupCreate, MatchdayCalculate
+
+def generate_tenant_code(db: Session) -> str:
+    while True:
+        letters = ''.join(random.choices(string.ascii_uppercase, k=5))
+        numbers = ''.join(random.choices(string.digits, k=2))
+        code = letters + numbers
+        if not db.query(Tenant).filter(Tenant.code == code).first():
+            return code
 
 def create_tenant(db: Session, tenant_in: TenantCreate):
+    code = generate_tenant_code(db)
     db_tenant = Tenant(
         name=tenant_in.name,
+        code=code,
         allow_duplicate_players=tenant_in.allow_duplicate_players,
         lineup_size=tenant_in.lineup_size,
         bench_size=tenant_in.bench_size,
@@ -19,18 +30,89 @@ def create_tenant(db: Session, tenant_in: TenantCreate):
     db_user = User(
         tenant_id=db_tenant.id,
         email=tenant_in.admin_email,
-        hashed_password=get_password_hash(tenant_in.admin_password),
+        hashed_password=None,
         role="TA"
     )
     db.add(db_user)
     db.commit()
     return db_tenant
 
+def get_all_tenants(db: Session):
+    return db.query(Tenant).all()
+
+def update_tenant(db: Session, tenant_id: int, tenant_in: TenantUpdate):
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant non trovato")
+    update_data = tenant_in.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(tenant, field, value)
+    db.commit()
+    db.refresh(tenant)
+    return tenant
+
+def delete_tenant(db: Session, tenant_id: int):
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant non trovato")
+    
+    # Cascata manuale: elimina tutti i dati collegati al tenant
+    # Performance
+    from db.models import Performance, Lineup, Match, PointModifier, Team, Player, User
+    
+    # Rimuove le associazioni team_players prima di eliminare squadre/giocatori
+    teams = db.query(Team).filter(Team.tenant_id == tenant_id).all()
+    for team in teams:
+        team.players = []
+    db.commit()
+    
+    # Lineups
+    lineups = db.query(Lineup).join(Team).filter(Team.tenant_id == tenant_id).all()
+    for lineup in lineups:
+        db.delete(lineup)
+    
+    # Performances
+    performances = db.query(Performance).filter(Performance.tenant_id == tenant_id).all()
+    for perf in performances:
+        perf.modifiers = []
+    db.commit()
+    for perf in performances:
+        db.delete(perf)
+    
+    # Matches
+    matches = db.query(Match).filter(Match.tenant_id == tenant_id).all()
+    for match in matches:
+        db.delete(match)
+    
+    # PointModifiers
+    mods = db.query(PointModifier).filter(PointModifier.tenant_id == tenant_id).all()
+    for mod in mods:
+        db.delete(mod)
+    
+    # Players
+    players = db.query(Player).filter(Player.tenant_id == tenant_id).all()
+    for player in players:
+        db.delete(player)
+    
+    # Teams
+    for team in teams:
+        db.delete(team)
+    
+    # Users del tenant
+    users = db.query(User).filter(User.tenant_id == tenant_id).all()
+    for user in users:
+        db.delete(user)
+    
+    # Infine il tenant stesso
+    db.delete(tenant)
+    db.commit()
+    return {"message": f"Tenant '{tenant.name}' eliminato con successo"}
+
 def create_user(db: Session, user_in: UserCreate, tenant_id: int):
     db_user = User(
         tenant_id=tenant_id,
         email=user_in.email,
-        hashed_password=get_password_hash(user_in.password),
+        hashed_password=None,
         role=user_in.role
     )
     db.add(db_user)
@@ -46,7 +128,10 @@ def create_player(db: Session, player_in: PlayerCreate, tenant_id: int):
     return db_player
 
 def create_team(db: Session, team_in: TeamCreate, tenant_id: int):
-    db_team = Team(name=team_in.name, owner_id=team_in.owner_id, tenant_id=tenant_id)
+    user = db.query(User).filter(User.email == team_in.owner_email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    db_team = Team(name=team_in.name, owner_id=user.id, tenant_id=tenant_id)
     db.add(db_team)
     db.commit()
     db.refresh(db_team)
@@ -194,6 +279,10 @@ def calculate_matchday(db: Session, tenant_id: int, data: MatchdayCalculate):
     return {"message": "Giornata calcolata con successo"}
 
 def get_standings(db: Session, tenant_id: int):
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant:
+        return []
+    
     teams = db.query(Team).filter(Team.tenant_id == tenant_id).all()
     standings = {t.id: {"team_id": t.id, "team_name": t.name, "points": 0, "played": 0, "won": 0, "drawn": 0, "lost": 0, "goals_for": 0.0, "goals_against": 0.0} for t in teams}
 
@@ -212,8 +301,10 @@ def get_standings(db: Session, tenant_id: int):
                 standings[match.away_team_id]["goals_against"] += hs
                 
                 def to_goals(score):
-                    if score < 66: return 0
-                    return int((score - 66) / 6) + 1
+                    base = tenant.base_score_for_goal if tenant.base_score_for_goal is not None else 66.0
+                    step = tenant.step_for_goal if tenant.step_for_goal is not None else 6.0
+                    if score < base: return 0
+                    return int((score - base) / step) + 1
                 
                 hg = to_goals(hs)
                 ag = to_goals(as_)

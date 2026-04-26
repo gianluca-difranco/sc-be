@@ -11,9 +11,6 @@ echo "Starting deployment checks..."
 #   sleep 2
 # done
 
-echo "Generating initial migration if not exists..."
-alembic revision --autogenerate -m "Initial setup" || echo "Migration might already exist"
-
 echo "Applying database migrations..."
 alembic upgrade head
 

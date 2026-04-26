@@ -15,7 +15,17 @@ class UserBase(BaseModel):
     role: str
 
 class UserCreate(UserBase):
-    password: str
+    pass
+
+class RegisterRequest(BaseModel):
+    email: str
+    fanta_name: Optional[str] = None
+    fanta_code: Optional[str] = None
+
+class SetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+    confirm_password: str
 
 class UserResponse(UserBase):
     id: int
@@ -25,14 +35,34 @@ class UserResponse(UserBase):
 
 class TenantBase(BaseModel):
     name: str
+    code: Optional[str] = None
     allow_duplicate_players: bool = False
     lineup_size: int = 11
     bench_size: int = 15
     role_constraints: Optional[Dict[str, int]] = None
+    base_score_for_goal: float = 66.0
+    step_for_goal: float = 6.0
+
+    @field_validator('base_score_for_goal', mode='before')
+    @classmethod
+    def validate_base_score(cls, v):
+        return v if v is not None else 66.0
+
+    @field_validator('step_for_goal', mode='before')
+    @classmethod
+    def validate_step_score(cls, v):
+        return v if v is not None else 6.0
+
+class TenantUpdate(BaseModel):
+    name: Optional[str] = None
+    allow_duplicate_players: Optional[bool] = None
+    lineup_size: Optional[int] = None
+    bench_size: Optional[int] = None
+    base_score_for_goal: Optional[float] = None
+    step_for_goal: Optional[float] = None
 
 class TenantCreate(TenantBase):
     admin_email: str
-    admin_password: str
 
 class TenantResponse(TenantBase):
     id: int
@@ -57,7 +87,7 @@ class TeamBase(BaseModel):
     name: str
 
 class TeamCreate(TeamBase):
-    owner_id: int
+    owner_email: str
 
 class TeamResponse(TeamBase):
     id: int

@@ -53,19 +53,22 @@ class Lineup(Base):
 class Tenant(Base):
     __tablename__ = "tenants"
     id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(7), unique=True, index=True, nullable=True) # 5 letters + 2 numbers
     name = Column(String, unique=True, nullable=False)
     # Regole del Tenant
     allow_duplicate_players = Column(Boolean, default=False)
     lineup_size = Column(Integer, default=11)
     bench_size = Column(Integer, default=15) # Massimo 15
     role_constraints = Column(JSON, nullable=True) # Esempio: {"Portiere": 1, "Difensore": 3}
+    base_score_for_goal = Column(Float, default=66.0) # Punteggio per il primo gol
+    step_for_goal = Column(Float, default=6.0) # Punteggio per i gol successivi
 
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True) # Null se Supremo
     email = Column(String, unique=True, index=True)
-    hashed_password = Column(String)
+    hashed_password = Column(String, nullable=True)
     role = Column(String) # AS, TA, TU
 
 class Player(Base):

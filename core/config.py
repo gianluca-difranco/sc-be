@@ -34,6 +34,13 @@ class Config(BaseSettings):
     # AWS SQS
     AWS_REGION: str = "eu-south-1"
     SQS_QUEUE_URL: str = ""  # Es: https://sqs.eu-west-1.amazonaws.com/123456789/my-queue
+
+    # Email
+    SMTP_HOST: str = "localhost"
+    SMTP_PORT: int = 1025
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    FRONTEND_URL: str = "http://localhost:5173"
     
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
