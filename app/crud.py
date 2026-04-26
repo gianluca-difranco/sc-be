@@ -4,6 +4,9 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from db.models import Tenant, User, Player, Team, PointModifier, Match, Performance, Lineup
 from app.schemas import TenantCreate, TenantUpdate, UserCreate, PlayerCreate, TeamCreate, PointModifierCreate, LineupCreate, MatchdayCalculate
+from app.utils.sns import subscribe_user_to_tenant_topic
+from app.utils.sqs import send_to_sqs
+from core.config import config
 
 def generate_tenant_code(db: Session) -> str:
     while True:
@@ -35,6 +38,10 @@ def create_tenant(db: Session, tenant_in: TenantCreate):
     )
     db.add(db_user)
     db.commit()
+    
+    # Iscrivi il TA al topic SNS del tenant
+    subscribe_user_to_tenant_topic(db_user.email, db_tenant.id)
+    
     return db_tenant
 
 def get_all_tenants(db: Session):
@@ -118,6 +125,10 @@ def create_user(db: Session, user_in: UserCreate, tenant_id: int):
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
+    
+    # Iscrivi l'utente al topic SNS del tenant
+    subscribe_user_to_tenant_topic(db_user.email, tenant_id)
+    
     return db_user
 
 def create_player(db: Session, player_in: PlayerCreate, tenant_id: int):
@@ -220,6 +231,15 @@ def submit_lineup(db: Session, team_id: int, tenant_id: int, lineup_data: Lineup
     return lineup
 
 def calculate_matchday(db: Session, tenant_id: int, data: MatchdayCalculate):
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    base_goal = tenant.base_score_for_goal if tenant.base_score_for_goal is not None else 66.0
+    step_goal = tenant.step_for_goal if tenant.step_for_goal is not None else 6.0
+
+    def calc_goals(score):
+        if score is None or score < base_goal:
+            return 0
+        return int(1 + (score - base_goal) // step_goal)
+
     for p_id, perf_data in data.performances.items():
         perf = db.query(Performance).filter(
             Performance.player_id == p_id, 
@@ -271,11 +291,37 @@ def calculate_matchday(db: Session, tenant_id: int, data: MatchdayCalculate):
     for match in matches:
         if match.home_team_id:
             h_lineup = db.query(Lineup).filter(Lineup.team_id == match.home_team_id, Lineup.matchday == data.matchday).first()
-            match.home_score = h_lineup.total_score if h_lineup and h_lineup.total_score is not None else 0
+            match.home_score = calc_goals(h_lineup.total_score) if h_lineup else 0
         if match.away_team_id:
             a_lineup = db.query(Lineup).filter(Lineup.team_id == match.away_team_id, Lineup.matchday == data.matchday).first()
-            match.away_score = a_lineup.total_score if a_lineup and a_lineup.total_score is not None else 0
+            match.away_score = calc_goals(a_lineup.total_score) if a_lineup else 0
     db.commit()
+    
+    results = []
+    for m in matches:
+        h_team = db.query(Team).filter(Team.id == m.home_team_id).first() if m.home_team_id else None
+        a_team = db.query(Team).filter(Team.id == m.away_team_id).first() if m.away_team_id else None
+        results.append({
+            "home_team": h_team.name if h_team else "Riposo",
+            "away_team": a_team.name if a_team else "Riposo",
+            "home_score": m.home_score,
+            "away_score": m.away_score
+        })
+
+    # Recupera le email degli utenti del tenant per la Lambda
+    from db.models import User
+    users = db.query(User).filter(User.tenant_id == tenant_id).all()
+    emails = [u.email for u in users]
+
+    # Invia messaggio a SQS per notificare la fine del calcolo
+    sqs_payload = {
+        "tenant_id": tenant_id,
+        "matchday": data.matchday,
+        "results": results,
+        "emails": emails
+    }
+    send_to_sqs(sqs_payload, queue_url=config.SQS_MATCHDAY_QUEUE_URL)
+    
     return {"message": "Giornata calcolata con successo"}
 
 def get_standings(db: Session, tenant_id: int):
@@ -300,20 +346,11 @@ def get_standings(db: Session, tenant_id: int):
                 standings[match.away_team_id]["goals_for"] += as_
                 standings[match.away_team_id]["goals_against"] += hs
                 
-                def to_goals(score):
-                    base = tenant.base_score_for_goal if tenant.base_score_for_goal is not None else 66.0
-                    step = tenant.step_for_goal if tenant.step_for_goal is not None else 6.0
-                    if score < base: return 0
-                    return int((score - base) / step) + 1
-                
-                hg = to_goals(hs)
-                ag = to_goals(as_)
-                
-                if hg > ag:
+                if hs > as_:
                     standings[match.home_team_id]["points"] += 3
                     standings[match.home_team_id]["won"] += 1
                     standings[match.away_team_id]["lost"] += 1
-                elif hg < ag:
+                elif hs < as_:
                     standings[match.away_team_id]["points"] += 3
                     standings[match.away_team_id]["won"] += 1
                     standings[match.home_team_id]["lost"] += 1

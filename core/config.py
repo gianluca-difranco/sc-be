@@ -31,9 +31,14 @@ class Config(BaseSettings):
     POINT_STEP: float = 0.5
     MAX_BENCH_SIZE: int = 15
 
-    # AWS SQS
+    # AWS SQS / SNS
     AWS_REGION: str = "eu-south-1"
     SQS_QUEUE_URL: str = ""  # Es: https://sqs.eu-west-1.amazonaws.com/123456789/my-queue
+    SQS_MATCHDAY_QUEUE_URL: str = ""
+    SNS_TOPIC_ARN: str = ""
+    AWS_ENDPOINT_URL: str | None = None
+    AWS_ACCESS_KEY_ID: str | None = None
+    AWS_SECRET_ACCESS_KEY: str | None = None
 
     # Email
     SMTP_HOST: str = "localhost"
