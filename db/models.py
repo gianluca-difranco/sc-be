@@ -57,8 +57,8 @@ class Tenant(Base):
     name = Column(String, unique=True, nullable=False)
     # Regole del Tenant
     allow_duplicate_players = Column(Boolean, default=False)
-    lineup_size = Column(Integer, default=11)
-    bench_size = Column(Integer, default=15) # Massimo 15
+    lineup_size = Column(Integer, default=5)
+    bench_size = Column(Integer, default=5)
     role_constraints = Column(JSON, nullable=True) # Esempio: {"Portiere": 1, "Difensore": 3}
     base_score_for_goal = Column(Float, default=66.0) # Punteggio per il primo gol
     step_for_goal = Column(Float, default=6.0) # Punteggio per i gol successivi

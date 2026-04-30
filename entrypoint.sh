@@ -14,5 +14,8 @@ echo "Starting deployment checks..."
 echo "Applying database migrations..."
 alembic upgrade head
 
+echo "Creating Super Admin (if not exists)..."
+python create_super_admin.py
+
 echo "Starting server..."
 exec uvicorn app.main:app --host 0.0.0.0 --port 8000

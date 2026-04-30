@@ -215,6 +215,16 @@ def validate_lineup(db: Session, tenant_id: int, lineup_data: LineupCreate):
     return True, "OK"
 
 def submit_lineup(db: Session, team_id: int, tenant_id: int, lineup_data: LineupCreate):
+    # Verifica se la giornata è già stata calcolata
+    match_calculated = db.query(Match).filter(
+        Match.tenant_id == tenant_id,
+        Match.matchday == lineup_data.matchday,
+        Match.home_score.isnot(None)
+    ).first()
+    
+    if match_calculated:
+        raise HTTPException(status_code=400, detail="Giornata già calcolata. Impossibile modificare la formazione.")
+
     is_valid, msg = validate_lineup(db, tenant_id, lineup_data)
     if not is_valid:
         raise HTTPException(status_code=400, detail=msg)

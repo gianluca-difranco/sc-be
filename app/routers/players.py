@@ -22,3 +22,41 @@ def get_players(db: Session = Depends(get_db), current_user = Depends(require_ro
     Lista tutti i calciatori del tenant.
     """
     return db.query(Player).filter(Player.tenant_id == current_user.tenant_id).all()
+
+from fastapi import UploadFile, File, HTTPException
+import csv
+import io
+
+@router.post("/import")
+async def import_players_csv(file: UploadFile = File(...), db: Session = Depends(get_db), current_user = Depends(require_role(["TA"]))):
+    """
+    Importa giocatori da un file CSV.
+    Il CSV deve avere le colonne: name, role, credits
+    """
+    if not file.filename.endswith('.csv'):
+        raise HTTPException(status_code=400, detail="Il file deve essere un CSV")
+        
+    try:
+        contents = await file.read()
+        decoded = contents.decode('utf-8')
+        reader = csv.DictReader(io.StringIO(decoded))
+        
+        ALLOWED_ROLES = {"P", "D", "C", "A"}
+        imported_count = 0
+        for row in reader:
+            if 'name' in row and 'role' in row and 'credits' in row:
+                role = row['role'].strip().upper()
+                if role not in ALLOWED_ROLES:
+                    raise ValueError(f"Ruolo '{role}' non valido per il giocatore {row['name']}. I ruoli ammessi sono: P, D, C, A.")
+                
+                player_in = PlayerCreate(
+                    name=row['name'].strip(),
+                    role=role,
+                    credits=int(row['credits'].strip())
+                )
+                create_player(db=db, player_in=player_in, tenant_id=current_user.tenant_id)
+                imported_count += 1
+                
+        return {"message": f"{imported_count} giocatori importati con successo"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Errore durante l'importazione: {str(e)}")

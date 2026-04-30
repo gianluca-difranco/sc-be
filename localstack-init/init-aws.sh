@@ -7,11 +7,16 @@ echo "Creazione SNS Topic..."
 TOPIC_ARN=$(awslocal sns create-topic --name fantacloud-match-notifications --query 'TopicArn' --output text)
 echo "SNS Topic creato: $TOPIC_ARN"
 
-# 2. Crea SQS Queue
-echo "Creazione SQS Queue..."
+# 2. Crea SQS Queues
+echo "Creazione SQS Queue (Matchday)..."
 QUEUE_URL=$(awslocal sqs create-queue --queue-name fantacloud-matchday-calculated --query 'QueueUrl' --output text)
 QUEUE_ARN=$(awslocal sqs get-queue-attributes --queue-url $QUEUE_URL --attribute-names QueueArn --query 'Attributes.QueueArn' --output text)
 echo "SQS Queue creata: $QUEUE_URL"
+
+echo "Creazione SQS Queue (Messages)..."
+MSG_QUEUE_URL=$(awslocal sqs create-queue --queue-name fantacloud-messages --query 'QueueUrl' --output text)
+MSG_QUEUE_ARN=$(awslocal sqs get-queue-attributes --queue-url $MSG_QUEUE_URL --attribute-names QueueArn --query 'Attributes.QueueArn' --output text)
+echo "SQS Queue creata: $MSG_QUEUE_URL"
 
 # 3. Prepara la Lambda
 echo "Zippando la lambda..."

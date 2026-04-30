@@ -37,8 +37,8 @@ class TenantBase(BaseModel):
     name: str
     code: Optional[str] = None
     allow_duplicate_players: bool = False
-    lineup_size: int = 11
-    bench_size: int = 15
+    lineup_size: int = 5
+    bench_size: int = 5
     role_constraints: Optional[Dict[str, int]] = None
     base_score_for_goal: float = 66.0
     step_for_goal: float = 6.0
