@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers import auth, tenants, users, players, teams, matches, messages
 
-app = FastAPI(title="Fantacalcio Multi-Tenant API")
+app = FastAPI(title="Fantacalcio Multi-Tenant API", root_path="/api")
 
 app.add_middleware(
     CORSMiddleware,

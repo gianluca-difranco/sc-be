@@ -45,6 +45,12 @@ class Config(BaseSettings):
     SMTP_PORT: int = 1025
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
+    
+    # AWS SES
+    USE_SES: bool = False
+    AWS_SES_REGION: str = "eu-south-1"
+    SES_SENDER_EMAIL: str = "admin@supremo.com"
+    
     FRONTEND_URL: str = "http://localhost:5173"
     
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
