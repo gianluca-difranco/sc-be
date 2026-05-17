@@ -65,3 +65,10 @@ jobs:
         docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+    - name: Force ECS Update
+      run: |
+        CLUSTER=$(aws ecs list-clusters --query 'clusterArns[0]' --output text)
+        SERVICE=$(aws ecs list-services --cluster $CLUSTER --query 'serviceArns[0]' --output text)
+        echo "Updating ECS Service $SERVICE on Cluster $CLUSTER"
+        aws ecs update-service --cluster $CLUSTER --service $SERVICE --force-new-deployment
