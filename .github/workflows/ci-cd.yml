@@ -3,8 +3,30 @@ name: CI/CD Pipeline
 on:
   push:
     branches: [ "production" ]
+    paths:
+      - '.github/workflows/**'
+      - 'app/**'
+      - 'core/**'
+      - 'db/**'
+      - 'alembic/**'
+      - 'alembic.ini'
+      - 'Dockerfile'
+      - 'requirements.txt'
+      - 'create_super_admin.py'
+      - 'entrypoint.sh'
   pull_request:
     branches: [ "production" ]
+    paths:
+      - '.github/workflows/**'
+      - 'app/**'
+      - 'core/**'
+      - 'db/**'
+      - 'alembic/**'
+      - 'alembic.ini'
+      - 'Dockerfile'
+      - 'requirements.txt'
+      - 'create_super_admin.py'
+      - 'entrypoint.sh'
 
 env:
   ECR_REPOSITORY: project/backend
@@ -26,14 +48,17 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-    #     pip install flake8
+        pip install flake8
 
-    # - name: Lint with flake8
-    #   run: |
-    #     # Ferma la build se ci sono errori di sintassi o nomi non definiti
-    #     flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-    #     # exit-zero tratta tutti gli errori come warning (puoi rimuoverlo per essere più severo)
-    #     flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    - name: Lint with flake8
+      run: |
+        # Ferma la build se ci sono errori di sintassi o nomi non definiti
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        # exit-zero tratta tutti gli errori come warning
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+    - name: Build Docker image
+      run: docker build -t backend-test .
 
   push-to-ecr:
     name: Build e Push su ECR
