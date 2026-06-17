@@ -93,7 +93,23 @@ jobs:
 
     - name: Force ECS Update
       run: |
+        # Verifica se lo stack CloudFormation esiste
+        if ! aws cloudformation describe-stacks --stack-name EcsMultiContainerStack >/dev/null 2>&1; then
+          echo "Stack CloudFormation EcsMultiContainerStack non trovato. Salto l'aggiornamento ECS."
+          exit 0
+        fi
+
         CLUSTER=$(aws ecs list-clusters --query 'clusterArns[0]' --output text)
+        if [ -z "$CLUSTER" ] || [ "$CLUSTER" = "None" ]; then
+          echo "Nessun cluster ECS trovato. Salto l'aggiornamento."
+          exit 0
+        fi
+
         SERVICE=$(aws ecs list-services --cluster $CLUSTER --query 'serviceArns[0]' --output text)
+        if [ -z "$SERVICE" ] || [ "$SERVICE" = "None" ]; then
+          echo "Nessun servizio ECS trovato nel cluster $CLUSTER. Salto l'aggiornamento."
+          exit 0
+        fi
+
         echo "Updating ECS Service $SERVICE on Cluster $CLUSTER"
         aws ecs update-service --cluster $CLUSTER --service $SERVICE --force-new-deployment
