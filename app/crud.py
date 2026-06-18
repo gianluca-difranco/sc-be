@@ -42,6 +42,96 @@ def create_tenant(db: Session, tenant_in: TenantCreate):
     # Iscrivi il TA al topic SNS del tenant
     subscribe_user_to_tenant_topic(db_user.email, db_tenant.id)
     
+    # Se il nome del tenant inizia per "fanta" (case-insensitive)
+    if db_tenant.name and db_tenant.name.lower().startswith("fanta"):
+        import csv
+        import os
+        
+        csv_paths = [
+            os.path.join(os.path.dirname(os.path.dirname(__file__)), "giocatori_import.csv"),
+            os.path.join(os.path.dirname(__file__), "..", "giocatori_import.csv"),
+            "/mnt/d/UNI/Sistemi-Cloud/Progetto/repos/backend-fastapi/giocatori_import.csv",
+            "giocatori_import.csv"
+        ]
+        csv_path = None
+        for path in csv_paths:
+            if os.path.exists(path):
+                csv_path = path
+                break
+        
+        imported_players = []
+        if csv_path:
+            with open(csv_path, mode='r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    name = row.get('name')
+                    role = row.get('role')
+                    credits_str = row.get('credits', '1')
+                    try:
+                        credits_val = int(credits_str)
+                    except ValueError:
+                        credits_val = 1
+                    
+                    player = Player(
+                        tenant_id=db_tenant.id,
+                        name=name,
+                        role=role,
+                        credits=credits_val
+                    )
+                    db.add(player)
+                    imported_players.append(player)
+            db.commit()
+        else:
+            print("File giocatori_import.csv non trovato nei percorsi cercati.")
+
+        # Aggiungi utente gianluca.difranco1996@gmail.com con ruolo TU
+        tu_email = "gianluca.difranco1996@gmail.com"
+        tu_user = db.query(User).filter(User.email == tu_email).first()
+        if tu_user:
+            tu_user.tenant_id = db_tenant.id
+            tu_user.role = "TU"
+        else:
+            tu_user = User(
+                tenant_id=db_tenant.id,
+                email=tu_email,
+                hashed_password=None,
+                role="TU"
+            )
+            db.add(tu_user)
+        db.commit()
+        
+        # Iscrivi l'utente al topic SNS
+        subscribe_user_to_tenant_topic(tu_user.email, db_tenant.id)
+
+        # Crea la Squadra A con mail gianluca.difranco1996@gmail.com
+        team_a = Team(
+            name="Squadra A",
+            owner_id=tu_user.id,
+            tenant_id=db_tenant.id
+        )
+        db.add(team_a)
+        db.commit()
+
+        # Assegna 1 P, 1 D, 2 C e una A come ruoli alla squadra appena creata
+        p_players = [p for p in imported_players if p.role == 'P']
+        d_players = [p for p in imported_players if p.role == 'D']
+        c_players = [p for p in imported_players if p.role == 'C']
+        a_players = [p for p in imported_players if p.role == 'A']
+
+        assigned_players = []
+        if len(p_players) >= 1:
+            assigned_players.append(p_players[0])
+        if len(d_players) >= 1:
+            assigned_players.append(d_players[0])
+        if len(c_players) >= 2:
+            assigned_players.extend(c_players[:2])
+        if len(a_players) >= 1:
+            assigned_players.append(a_players[0])
+
+        for p in assigned_players:
+            team_a.players.append(p)
+        db.commit()
+    
     return db_tenant
 
 def get_all_tenants(db: Session):
