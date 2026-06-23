@@ -6,7 +6,6 @@ from app.auth import get_password_hash
 def create_super_admin():
     db = SessionLocal()
     try:
-        # Recupera credenziali dall'ambiente
         admin_email = os.environ.get("ADMIN_EMAIL", "admin@supremo.com")
         admin_password = os.environ.get("ADMIN_PASSWORD", "password_suprema")
 
